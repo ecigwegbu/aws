@@ -1,0 +1,449 @@
+---
+# This AWS CloudFormation Template creates a stack that executes the
+# Unix Training Academy Sample VPC Design named UTAVPC1 (see Class Materials)
+#
+# The VPC features a public, private and database subnet in each of three
+# Availability Zones, with each AZ having one bastion host and one NAT gateway.
+# One Bastion Host per AZ is an upgrade from the single Bastion Host in the class
+# sample VPC, the reason being to improve availability in case of fail-over
+# of an AZ. This design will require an Elastic Load Balancer before the three BHs,
+# The addition of the ELB will be the subject of a future upgrade of this template.
+#
+# The template utilises two parameters:
+# 1 - the name of the key pair (which must exist prior to launching this template)
+# 2 - the name of the IAM Instance Profile to associate with the EC2's. This is 
+#     optional but it must exist already if specified, otherwise there will be an error.
+#
+# TODO: Include a web server in each public subnet, with a database in the
+# database subnet, and an NFS file server in the private subnet for each AZ.
+#
+# (c) 2024. Unix Training Academy.
+#
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "UTA VPC with Cloud Formation"
+Metadata:
+  Author: "Elias Igwegbu"
+Parameters:
+  KeyPairName:
+    Description: 'Name of the EC2 Key Pair to allow SSH access to the instance'
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    # Default: 'UTAbastionkeys'
+    ConstraintDescription: 'must be the name of an existing EC2 KeyPair.'
+  IAMInstanceProfileName:
+    Description: 'Name of the IAM Instance Profile to associate with the EC2 instance'
+    Type: String
+    # Default: 'ec2-ssm-fullaccess'
+    ConstraintDescription: 'must be the name of an existing IAM Instance Profile.'
+Resources: 
+  UTAVPC1:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: UTAVPC1
+  # Public Subnets A, B, C
+  UTApublicA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: UTAVPC1
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: "us-east-1a"
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: UTApublicA
+  UTApublicB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: UTAVPC1
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: "us-east-1b"
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: UTApublicB
+  UTApublicC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: UTAVPC1
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: "us-east-1c"
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: UTApublicC
+  # Private Subnets A, B, C
+  UTAprivateA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: UTAVPC1
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone: "us-east-1a"
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: Name
+        Value: UTAprivateA
+  UTAprivateB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: UTAVPC1
+      CidrBlock: 10.0.5.0/24
+      AvailabilityZone: "us-east-1b"
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: Name
+        Value: UTAprivateB
+  UTAprivateC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: UTAVPC1
+      CidrBlock: 10.0.6.0/24
+      AvailabilityZone: "us-east-1c"
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: Name
+        Value: UTAprivateC
+  # Databse Subnets A, B, C
+  UTAdatabaseA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: UTAVPC1
+      CidrBlock: 10.0.8.0/24
+      AvailabilityZone: "us-east-1a"
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: Name
+        Value: UTAdatabaseA
+  UTAdatabaseB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: UTAVPC1
+      CidrBlock: 10.0.9.0/24
+      AvailabilityZone: "us-east-1b"
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: Name
+        Value: UTAdatabaseB
+  UTAdatabaseC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: UTAVPC1
+      CidrBlock: 10.0.10.0/24
+      AvailabilityZone: "us-east-1c"
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: Name
+        Value: UTAdatabaseC
+# Create Internet Gateway
+  UTAVPC1IGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: UTAVPC1IGW
+# Attach IGW to VPC
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: UTAVPC1
+      InternetGatewayId:
+        Ref: UTAVPC1IGW
+# Public Route Table
+  UTApublicRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  
+        Ref: UTAVPC1
+      Tags:
+      - Key: Name
+        Value: UTApublicRT
+# Public Route for IPv4
+  UTApublicRTroute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway  # Must attach IGW to VPC first 
+    Properties:
+      RouteTableId:
+        Ref: UTApublicRT
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: UTAVPC1IGW
+# Public Route for IPv6
+  UTApublicRTroute6:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId:
+        Ref: UTApublicRT
+      DestinationIpv6CidrBlock: "::/0"
+      GatewayId:
+        Ref: UTAVPC1IGW
+# Associate the public Route Table with public Subnets A, B, C
+  UTASubnetRouteTableAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: UTApublicA
+      RouteTableId:
+        Ref: UTApublicRT
+  UTASubnetRouteTableAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: UTApublicB
+      RouteTableId:
+        Ref: UTApublicRT
+  UTASubnetRouteTableAssociationC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: UTApublicC
+      RouteTableId:
+        Ref: UTApublicRT
+# Define a security group for the Bastion Host
+  UTAbastionSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "UTAbastionSG"
+      VpcId: !Ref UTAVPC1
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: icmp
+          FromPort: 8
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value: UTAbastionSG
+# Define the Bastion Host in US East 1a - Public
+  BastionHostA: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: "ami-0fe630eb857a6ec83"
+      InstanceType: "t2.micro"
+      KeyName: !Ref KeyPairName
+      SecurityGroupIds:
+        - !Ref UTAbastionSG
+      SubnetId: !Ref UTApublicA
+      AvailabilityZone: "us-east-1a"
+      IamInstanceProfile: !Ref IAMInstanceProfileName
+      Tags:
+        - Key: Name
+          Value: "BastionHostA"
+# Define the Bastion Host in US East 1b - Public
+  BastionHostB: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: "ami-0fe630eb857a6ec83"
+      InstanceType: "t2.micro"
+      KeyName: !Ref KeyPairName
+      SecurityGroupIds:
+        - !Ref UTAbastionSG
+      SubnetId: !Ref UTApublicB
+      AvailabilityZone: "us-east-1b"
+      IamInstanceProfile: !Ref IAMInstanceProfileName
+      Tags:
+        - Key: Name
+          Value: "BastionHostB"
+# Define the Bastion Host in US East 1c - Public
+  BastionHostC: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: "ami-0fe630eb857a6ec83"
+      InstanceType: "t2.micro"
+      KeyName: !Ref KeyPairName
+      SecurityGroupIds:
+        - !Ref UTAbastionSG
+      SubnetId: !Ref UTApublicC
+      AvailabilityZone: "us-east-1c"
+      IamInstanceProfile: !Ref IAMInstanceProfileName
+      Tags:
+        - Key: Name
+          Value: "BastionHostC"
+# Handle Private Subnets and Database Subnets
+# Availability Zone us-east-1a
+# Create NAT Gateway (first create the EIP)
+# # Create EIP; note that the domain is vpc
+  NATgatewayAEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+        Domain: vpc
+        Tags:
+        - Key: Name
+          Value: "NATgatewayA EIP"
+# # Create NAT gateway (default is public) and reference the EIP above
+  NATgatewayA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+        AllocationId: !GetAtt NATgatewayAEIP.AllocationId
+        SubnetId: !Ref UTApublicA
+        Tags:
+        - Key: Name
+          Value: NATgatewayA
+# Create private route table, associate it with the private and database
+# subnet, then add a route to to the Internet to the NAT gateway
+# # Create private route table
+  UTAprivateART:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  
+        Ref: UTAVPC1
+      Tags:
+      - Key: Name
+        Value: UTAprivateART
+# # Associate the private Route Table with private subnet A and database A
+  UTASubnetRouteTableAssociationPrivateA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: UTAprivateA
+      RouteTableId:
+        Ref: UTAprivateART
+  UTASubnetRouteTableAssociationDatabaseA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: UTAdatabaseA
+      RouteTableId:
+        Ref: UTAprivateART
+# # Add route to Internet to the NAT Gateway for IPv4
+  UTAprivateARTroute:
+    Type: AWS::EC2::Route
+    DependsOn: NATgatewayA  # Must create NAT Gateway in VPC/pub subnet first 
+    Properties:
+      RouteTableId:
+        Ref: UTAprivateART
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATgatewayA
+# # # #
+# Availability Zone us-east-1b
+# Create NAT Gateway (first create the EIP)
+# # Create EIP; note that the domain is vpc
+  NATgatewayBEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+        Domain: vpc
+        Tags:
+        - Key: Name
+          Value: "NATgatewayB EIP"
+# # Create NAT gateway (default is public) and reference the EIP above
+  NATgatewayB:
+    Type: AWS::EC2::NatGateway
+    Properties:
+        AllocationId: !GetAtt NATgatewayBEIP.AllocationId
+        SubnetId: !Ref UTApublicB
+        Tags:
+        - Key: Name
+          Value: NATgatewayB
+# Create private route table, associate it with the private and database
+# subnet, then add a route to to the Internet to the NAT gateway
+# # Create private route table
+  UTAprivateBRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  
+        Ref: UTAVPC1
+      Tags:
+      - Key: Name
+        Value: UTAprivateBRT
+# # Associate the private Route Table with private subnet B and database B
+  UTASubnetRouteTableAssociationPrivateB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: UTAprivateB
+      RouteTableId:
+        Ref: UTAprivateBRT
+  UTASubnetRouteTableAssociationDatabaseB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: UTAdatabaseB
+      RouteTableId:
+        Ref: UTAprivateBRT
+# # Add route to Internet to the NAT Gateway for IPv4
+  UTAprivateBRTroute:
+    Type: AWS::EC2::Route
+    DependsOn: NATgatewayB  # Must create NAT Gateway in VPC/pub subnet first 
+    Properties:
+      RouteTableId:
+        Ref: UTAprivateBRT
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATgatewayB
+# # # #
+# Availability Zone us-east-1c
+# Create NAT Gateway (first create the EIP)
+# # Create EIP; note that the domain is vpc
+  NATgatewayCEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+        Domain: vpc
+        Tags:
+        - Key: Name
+          Value: "NATgatewayC EIP"
+# # Create NAT gateway (default is public) and reference the EIP above
+  NATgatewayC:
+    Type: AWS::EC2::NatGateway
+    Properties:
+        AllocationId: !GetAtt NATgatewayCEIP.AllocationId
+        SubnetId: !Ref UTApublicC
+        Tags:
+        - Key: Name
+          Value: NATgatewayC
+# Create private route table, associate it with the private and database
+# subnet, then add a route to to the Internet to the NAT gateway
+# # Create private route table
+  UTAprivateCRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  
+        Ref: UTAVPC1
+      Tags:
+      - Key: Name
+        Value: UTAprivateCRT
+# # Associate the private Route Table with private subnet C and database C
+  UTASubnetRouteTableAssociationPrivateC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: UTAprivateC
+      RouteTableId:
+        Ref: UTAprivateCRT
+  UTASubnetRouteTableAssociationDatabaseC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: UTAdatabaseC
+      RouteTableId:
+        Ref: UTAprivateCRT
+# # Add route to Internet to the NAT Gateway for IPv4
+  UTAprivateCRTroute:
+    Type: AWS::EC2::Route
+    DependsOn: NATgatewayC  # Must create NAT Gateway in VPC/pub subnet first 
+    Properties:
+      RouteTableId:
+        Ref: UTAprivateCRT
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATgatewayC
