@@ -20,7 +20,7 @@
 # (c) 2024. Unix Training Academy.
 #
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "UTA VPC with Cloud Formation"
+Description: "UTA VPC with Cloud Formation v2"
 Metadata:
   Author: "Elias Igwegbu"
 Parameters:
