@@ -22,7 +22,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "UTA VPC with Cloud Formation v1.1"
 Metadata:
-  Author: "Elias Igwegbu"
+  Author: "Elias C. Igwegbu, B.ENG, MBA, MNSE, SWE-ALX/Holberton, RHCSA"
 Parameters:
   KeyPairName:
     Description: 'Name of the EC2 Key Pair to allow SSH access to the instance'
