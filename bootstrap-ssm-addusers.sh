@@ -5,8 +5,8 @@
 # The users will connect to the EC2 instance from putty using the same
 # private key used by the default user ec2-user
 
-# (c) 2024 Unix Training Academy
-# Author: Elias Igwegbu
+# Usage: When creating an EC2 or creating/updating a Launch template, copy and paste this
+# script into the "user data" text box in the "Advanced details" section of the console.
 
 # Install, Start and Enable Amazon SSM Agent (if using RHEL AMI)
 if [[ -n $(grep -i 'Red Hat Enterprise Linux' /etc/os-release) ]]; then
@@ -26,3 +26,6 @@ for user in elias richard donald; do  # do this for each of the three named user
     sudo chmod 600 /home/${user}/.ssh/authorized_keys
   fi
 done
+
+# (c) 2024 Unix Training Academy. All Rights Reserved.
+# Author: Elias Igwegbu, MNSE, MBA, SWE-ALX/Holberton, RHCSA
