@@ -28,4 +28,4 @@ for user in elias richard donald; do  # do this for each of the three named user
 done
 
 # (c) 2024 Unix Training Academy. All Rights Reserved.
-# Author: Elias Igwegbu, MNSE, MBA, SWE-ALX/Holberton, AWS-CCA, RHCSA
+# Author: Elias Igwegbu, MNSE, MBA, SWE-ALX/Holberton, AWS-CCP, RHCSA
