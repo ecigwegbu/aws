@@ -56,7 +56,7 @@ Resources:
         Value: UTAansibleSG
 # Define 4 Managed Nodes using AutoScaling
   AnsibleManagedNodeLaunchConfiguration: 
-    Type: AWS:AutoScaling::LaunchConfiguration
+  Type: AWS::AutoScaling::LaunchConfiguration
     Properties: 
       ImageId: "ami-0fe630eb857a6ec83"
       InstanceType: "t2.micro"
