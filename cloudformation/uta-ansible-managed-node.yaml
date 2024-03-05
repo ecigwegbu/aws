@@ -1,0 +1,121 @@
+---
+# This AWS CloudFormation Template creates a stack that executes the
+# Unix Training Academy Ansible Lab (see Class Materials)
+#
+# The Ansible Lab includes a RHEL9 control Node and 4 RHEL9 managed nodes.
+# Each node has a user named ansible
+# The password of the ansible user and the ssh private key for the ansible 
+# user on the control node is retrieved from the Amazon Secrets Manager
+# The ansible user can ssh to the managed nodes without a password
+# (so, strictly speaking, the ansible user's password is not really required)
+# 
+# The template utilises two parameters:
+# 1 - the name of the key pair (which must exist prior to launching this template)
+# 2 - the name of the IAM Instance Profile to associate with the EC2's. This is 
+#     This role must include the 'secretsmanager:GetSecretValue' policy.
+#
+# (c) 2024. Unix Training Academy. Author: Elias Igwgebu
+#
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "UTA Ansible Lab"
+Metadata:
+  Author: "Elias C. Igwegbu, B.ENG, MBA, MNSE, SWE-ALX/Holberton, RHCSA"
+Parameters:
+  KeyPairName:
+    Description: 'Name of an existing EC2 Key Pair to allow SSH access to the instance'
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    # Default: 'UTAbastionkeys'
+    ConstraintDescription: 'must be the name of an existing EC2 KeyPair.'
+  IAMInstanceProfileName:
+    Description: 'Name of the IAM Instance Profile to associate with the EC2 instance'
+    Type: String
+    # Default: 'ec2-ssm-fullaccess'
+    ConstraintDescription: 'must be the name of an existing IAM Instance Profile that includes secretsmanager:GetSecretValue'
+Resources: 
+# Define a security group for the Bastion Host
+  UTAansibleSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "UTAansibleSG"
+      # VpcId: !Ref UTAVPC1
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: icmp
+          FromPort: 8
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value: UTAansibleSG
+# Define 4 Managed Nodes using AutoScaling
+  AnsibleManagedNodeLaunchConfiguration: 
+    Type: AWS:AutoScaling::LaunchConfiguration
+    Properties: 
+      ImageId: "ami-0fe630eb857a6ec83"
+      InstanceType: "t2.micro"
+      KeyName: !Ref KeyPairName
+      SecurityGroups:
+        - !Ref UTAansibleSG
+      IamInstanceProfile: !Ref IAMInstanceProfileName
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Install AWS CLI
+          sudo curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" \
+            -o "awscliv2.zip"
+          sudo dnf install -y unzip
+          sudo unzip awscliv2.zip
+          sudo ./aws/install
+          sudo export PATH=$PATH:/usr/local/bin
+          aws --version
+          # Install jq for parsing JSON data
+          sudo dnf install -y jq
+          # Install, Start and Enable Amazon SSM Agent (if using RHEL AMI)
+          if [[ -n $(grep -i 'Red Hat Enterprise Linux' /etc/os-release) ]]; then
+          dnf install -y https://s3.us-east-1.amazonaws.com/amazon-ssm-us-east-1/latest/linux_amd64/amazon-ssm-agent.rpm
+          systemctl enable --now amazon-ssm-agent
+          fi
+          # create user ansible and enable ssh authentication with the existing key-pair
+          if [[ -z $(getent passwd ansible) ]]; then
+            sudo useradd ansible
+            sudo mkdir /home/ansible/.ssh
+            sudo cp /home/ec2-user/.ssh/authorized_keys\
+              /home/ansible/.ssh/authorized_keys
+            sudo chown -R ansible:ansible /home/ansible/.ssh
+            sudo chmod 700 /home/ansible/.ssh
+            sudo chmod 600 /home/ansible/.ssh/authorized_keys
+            sudo echo "ansible ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/ansible
+            # Retrieve the Ansible user's password from Amazon Secrets Manager
+            # and assign it to the ansible user
+            AnsibleUserPassword=$(aws secretsmanager get-secret-value \
+              --secret-id ansible_user_password --query 'SecretString' \
+              --output text | jq -r .ansible_user_password)
+            sudo echo $AnsibleUserPassword | sudo passwd ansible --stdin
+            # Copy the private key from Amazon Secrets manager to ~ansible/id_rsa
+            AnsiblePrivateKey=$(aws secretsmanager get-secret-value --secret-id \
+            ansible_private_key --query 'SecretString' \
+              --output text | jq -r .ansible_private_key)
+            sudo echo $AnsiblePrivateKey | sudo tee /home/ansible/.ssh/id_rsa
+            # sudo echo AnsiblePrivateKey | sudo tee /home/ansible/.ssh/id_rsa
+            sudo chmod 600 /home/ansible/.ssh/id_rsa
+            sudo chown -R ansible:ansible /home/ansible/.ssh
+          fi
+  AnsibleManagedNodeAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref AnsibleManagedNodeLaunchConfiguration             MinSize: '4'
+      MaxSize: '4'
+      DesiredCapacity: '4'
+      VPCZoneIdentifier:
+        - subnet-03198101485465b7a
+      Tags:
+        - Key: Name
+          Value: AnsibleManagedNode
+          PropagateAtLaunch: true
