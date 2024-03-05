@@ -110,7 +110,8 @@ Resources:
   AnsibleManagedNodeAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      LaunchConfigurationName: !Ref AnsibleManagedNodeLaunchConfiguration             MinSize: '4'
+      LaunchConfigurationName: !Ref AnsibleManagedNodeLaunchConfiguration
+      MinSize: '4'
       MaxSize: '4'
       DesiredCapacity: '4'
       VPCZoneIdentifier:
