@@ -72,7 +72,6 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-
           # Install AWS CLI
           sudo curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" \
             -o "awscliv2.zip"
@@ -81,42 +80,35 @@ Resources:
           sudo ./aws/install
           sudo export PATH=$PATH:/usr/local/bin
           aws --version
-
           # Install jq for parsing JSON data
           sudo dnf install -y jq
-
           # Install, Start and Enable Amazon SSM Agent (if using RHEL AMI)
           if [[ -n $(grep -i 'Red Hat Enterprise Linux' /etc/os-release) ]]; then
           dnf install -y https://s3.us-east-1.amazonaws.com/amazon-ssm-us-east-1/latest/linux_amd64/amazon-ssm-agent.rpm
           systemctl enable --now amazon-ssm-agent
-fi
-
-          # create additional users and enable ssh authentication with the existing key-pair
-          for user in ansible; do  # do this for each of the three named users
-            if [[ -z $(getent passwd ${user}) ]]; then  # but only if they don't already exist
-              sudo useradd ${user}
-              sudo mkdir /home/${user}/.ssh
-              sudo cp /home/ec2-user/.ssh/authorized_keys\
-                /home/${user}/.ssh/authorized_keys
-              sudo chown -R ${user}:${user} /home/${user}/.ssh
-              sudo chmod 700 /home/${user}/.ssh
-              sudo chmod 600 /home/${user}/.ssh/authorized_keys
-              sudo echo "${user} ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/${user}
-
-              # Retrieve the Ansible user's password from Amazon Secrets Manager
-              # and assign it to the ansible user
-              AnsibleUserPassword=$(aws secretsmanager get-secret-value \
-                --secret-id ansible_user_password --query 'SecretString' \
-                --output text | jq -r .ansible_user_password)
-              sudo echo $AnsibleUserPassword | sudo passwd ${user} --stdin
-
-              # Copy the private key from Amazon Secrets manager to ~ansible/id_rsa
-              AnsiblePrivateKey=$(aws secretsmanager get-secret-value --secret-id \
-              ansible_private_key --query 'SecretString' \
-                --output text | jq -r .ansible_private_key)
-              sudo echo $AnsiblePrivateKey | sudo tee /home/${user}/.ssh/id_rsa
-              # sudo echo AnsiblePrivateKey | sudo tee /home/${user}/.ssh/id_rsa
-              sudo chmod 600 /home/${user}/.ssh/id_rsa
-              sudo chown -R ${user}:${user} /home/${user}/.ssh
-            fi
-          done
+          fi
+          # create user ansible and enable ssh authentication with the existing key-pair
+          if [[ -z $(getent passwd ansible) ]]; then
+            sudo useradd ansible
+            sudo mkdir /home/ansible/.ssh
+            sudo cp /home/ec2-user/.ssh/authorized_keys\
+              /home/ansible/.ssh/authorized_keys
+            sudo chown -R ansible:ansible /home/ansible/.ssh
+            sudo chmod 700 /home/ansible/.ssh
+            sudo chmod 600 /home/ansible/.ssh/authorized_keys
+            sudo echo "ansible ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/ansible
+            # Retrieve the Ansible user's password from Amazon Secrets Manager
+            # and assign it to the ansible user
+            AnsibleUserPassword=$(aws secretsmanager get-secret-value \
+              --secret-id ansible_user_password --query 'SecretString' \
+              --output text | jq -r .ansible_user_password)
+            sudo echo $AnsibleUserPassword | sudo passwd ansible --stdin
+            # Copy the private key from Amazon Secrets manager to ~ansible/id_rsa
+            AnsiblePrivateKey=$(aws secretsmanager get-secret-value --secret-id \
+            ansible_private_key --query 'SecretString' \
+              --output text | jq -r .ansible_private_key)
+            sudo echo $AnsiblePrivateKey | sudo tee /home/ansible/.ssh/id_rsa
+            # sudo echo AnsiblePrivateKey | sudo tee /home/ansible/.ssh/id_rsa
+            sudo chmod 600 /home/ansible/.ssh/id_rsa
+            sudo chown -R ansible:ansible /home/ansible/.ssh
+          fi
