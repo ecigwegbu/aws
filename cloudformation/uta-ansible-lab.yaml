@@ -114,8 +114,8 @@ Resources:
           fi
 # Define 4 Managed Nodes using AutoScaling
   AnsibleManagedNodeLaunchConfiguration: 
-  Type: AWS::AutoScaling::LaunchConfiguration
-    Properties: 
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
       ImageId: "ami-0fe630eb857a6ec83"
       InstanceType: "t2.micro"
       KeyName: !Ref KeyPairName
