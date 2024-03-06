@@ -125,7 +125,7 @@ Resources:
         SecurityGroupIds:
           - !Ref UTAansibleSG
         IamInstanceProfile:
-          Arn: !GetAtt IAMInstanceProfileName.Arn
+          Name: !Ref IAMInstanceProfileName
         NetworkInterfaces:
           - DeviceIndex: 0
             AssociatePublicIpAddress: false # Do not assign public IP
