@@ -122,13 +122,15 @@ Resources:
         ImageId: "ami-0fe630eb857a6ec83"
         InstanceType: "t2.micro"
         KeyName: !Ref KeyPairName
-        SecurityGroupIds:
-          - !Ref UTAansibleSG
+        # SecurityGroups:
+        #   - "launch-wizard-15"
         IamInstanceProfile:
           Name: !Ref IAMInstanceProfileName
         NetworkInterfaces:
           - DeviceIndex: 0
             AssociatePublicIpAddress: false # Do not assign public IP
+            Groups:
+              - !GetAtt UTAansibleSG.GroupId
             # SubnetId can be omitted to allow Auto Scaling group to control placement
             # SubnetId: subnet-12345678 # Example Subnet ID
         UserData:
@@ -190,4 +192,5 @@ Resources:
         - Key: Name
           Value: AnsibleManagedNode
           PropagateAtLaunch: true
+
 
