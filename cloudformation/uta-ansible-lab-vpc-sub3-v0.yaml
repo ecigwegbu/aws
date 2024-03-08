@@ -408,6 +408,8 @@ Resources:
         Version: !GetAtt AnsibleManagedNodeLaunchTemplate.LatestVersionNumber
       VPCZoneIdentifier:
         - Ref: UTAprivateA
+        - Ref: UTAprivateB
+        - Ref: UTAprivateC
         # - subnet-03198101485465b7a
       Tags:
         - Key: Name

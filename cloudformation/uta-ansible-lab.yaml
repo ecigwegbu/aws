@@ -11,12 +11,13 @@
 # The ansible user can ssh from any node to any other node without a password
 # (so, strictly speaking, the ansible user's password is not really required for Ansible tasks)
 # 
-# The template utilises two parameters, with customisable default values:
+# The template utilises three parameters, with default values; change the defaults in this template as desired:
 # 1 - the name of the key pair (which must exist prior to launching this template)
 # 2 - the name of the IAM Instance Profile to associate with the EC2's. 
 #     This role must include the 'secretsmanager:GetSecretValue' policy.
 # The lab utilises a non-default VPC (UTAAnsibleVPC), with one public subnet
 # (for the Control Node) and, for simplicity, one private subnet (for the four managed nodes). The private subnet utilises a NAT Gateway.
+# 3 - The Number of Managed Nodes
 #
 # To avoid unnecessary cloud computing charges (especially due to the NAT Gateway),  tear down the stack after lab work.
 #
@@ -37,6 +38,10 @@ Parameters:
     Type: String
     Default: 'uta-ansible-lab'  # Change as desired to customise this template
     ConstraintDescription: 'must be the name of an existing IAM Instance Profile that includes secretsmanager:GetSecretValue'
+  NumberOfManagedNodes:
+    Description: 'The number of managed nodes'
+    Type: Number
+    Default: 4  # Change this default as desired
 Resources: 
   UTAAnsibleVPC:
     Type: AWS::EC2::VPC
@@ -400,14 +405,16 @@ Resources:
   AnsibleManagedNodeAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      MinSize: '4'
-      MaxSize: '4'
-      DesiredCapacity: '4'
+      MinSize: !Ref NumberOfManagedNodes
+      MaxSize: !Ref NumberOfManagedNodes
+      DesiredCapacity: !Ref NumberOfManagedNodes
       LaunchTemplate:
         LaunchTemplateId: !Ref AnsibleManagedNodeLaunchTemplate
         Version: !GetAtt AnsibleManagedNodeLaunchTemplate.LatestVersionNumber
       VPCZoneIdentifier:
         - Ref: UTAprivateA
+        - Ref: UTAprivateB
+        - Ref: UTAprivateC
         # - subnet-03198101485465b7a
       Tags:
         - Key: Name
