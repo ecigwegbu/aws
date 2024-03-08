@@ -258,9 +258,9 @@ Resources:
       IamInstanceProfile: !Ref IAMInstanceProfileName
       Tags:
         - Key: Name
-          Value: "AnsibleControlNode"
+          Value: "workstation"
         - Key: Type
-          Value: Workstation
+          Value: "AnsibleNode"
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
@@ -378,8 +378,8 @@ Resources:
         # - subnet-03198101485465b7a
       Tags:
         - Key: Name
-          Value: AnsibleManagedNode
+          Value: server
           PropagateAtLaunch: true
         - Key: Type
-          Value: server
+          Value: "AnsibleNode"
           PropagateAtLaunch: true

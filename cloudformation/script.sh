@@ -1,7 +1,11 @@
 #!/bin/bash
 
+# create the file
+aws ec2 describe-instances     --filters "Name=tag:Type,Values=AnsibleNode" \
+  --query 'Reservations[*].Instances[*].[PrivateIpAddress, Tags[?Key==`Type`].Value | [0]]' \
+  --output text > server_list.txt
 # The file you want to process
-file="your_file_here.txt"
+file="server_list.txt"
 
 # Letter initialization
 letter=a
