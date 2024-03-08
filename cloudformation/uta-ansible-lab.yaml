@@ -259,6 +259,8 @@ Resources:
       Tags:
         - Key: Name
           Value: "AnsibleControlNode"
+        - Key: Type
+          Value: AnsibleNode
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
@@ -377,4 +379,7 @@ Resources:
       Tags:
         - Key: Name
           Value: AnsibleManagedNode
+          PropagateAtLaunch: true
+        - Key: Type
+          Value: AnsibleNode
           PropagateAtLaunch: true
