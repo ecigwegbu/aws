@@ -43,7 +43,6 @@ Parameters:
     Type: Number
     Default: 4  # Change this default as desired
 Resources: 
-# Create VPC
   UTAAnsibleVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -53,7 +52,8 @@ Resources:
       Tags:
         - Key: Name
           Value: UTAAnsibleVPC
-# Create public subnet - just one, for the managed node
+# BEGIN IMPORT for PUBLIC SUBNET *****************
+  # Public Subnets A, B, C
   UTApublicA:
     Type: AWS::EC2::Subnet
     Properties:
@@ -65,7 +65,7 @@ Resources:
       Tags:
       - Key: Name
         Value: UTApublicA
-# Create Internet Gateway for the VPC
+# Create Internet Gateway
   UTAAnsibleVPCIGW:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -80,7 +80,7 @@ Resources:
         Ref: UTAAnsibleVPC
       InternetGatewayId:
         Ref: UTAAnsibleVPCIGW
-# Create a Route Table that will be used for the public subnet
+# Public Route Table
   UTApublicRT:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -89,7 +89,7 @@ Resources:
       Tags:
       - Key: Name
         Value: UTApublicRT
-# Add a Route (IPv4) to the route table for the public subnet
+# Public Route for IPv4
   UTApublicRTroute:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway  # Must attach IGW to VPC first 
@@ -99,7 +99,7 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId:
         Ref: UTAAnsibleVPCIGW
-# Add a Route (IPv6) to the route table for the public subnet
+# Public Route for IPv6
   UTApublicRTroute6:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
@@ -109,7 +109,7 @@ Resources:
       DestinationIpv6CidrBlock: "::/0"
       GatewayId:
         Ref: UTAAnsibleVPCIGW
-# Associate the public Route Table with the one public subnet
+# Associate the public Route Table with public Subnets A, B, C
   UTASubnetRouteTableAssociationA:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -117,7 +117,9 @@ Resources:
         Ref: UTApublicA
       RouteTableId:
         Ref: UTApublicRT
-# Define Private Subnets A, B, C, for managed nodes
+# END IMPORT for PUBLIC SUBNET *****************
+# BEGIN IMPORT *********************
+  # Define Private Subnets A, B, C
   UTAprivateA:
     Type: AWS::EC2::Subnet
     Properties:
@@ -151,69 +153,118 @@ Resources:
       Tags:
       - Key: Name
         Value: UTAprivateC
-# Create and configure one NAT Gateway
-# For simplicity, this will be used for all the private subnets
-# First create an EIP; note that the domain is vpc
-  NATgatewayEIP:
+# Handle Private Subnets
+# Availability Zone us-east-1a
+# Create NAT Gateway (first create the EIP)
+# # Create EIP; note that the domain is vpc
+  NATgatewayAEIP:
     Type: AWS::EC2::EIP
     Properties:
         Domain: vpc
         Tags:
         - Key: Name
-          Value: "NATgateway EIP"
-# Now  create the NAT gateway (default is public) and reference the EIP above
-  NATgateway:
+          Value: "NATgatewayA EIP"
+# # Create NAT gateway (default is public) and reference the EIP above
+  NATgatewayA:
     Type: AWS::EC2::NatGateway
     Properties:
-        AllocationId: !GetAtt NATgatewayEIP.AllocationId
-        SubnetId: !Ref UTApublicA  # The one NAT GW is located in UTApublicA
+        AllocationId: !GetAtt NATgatewayAEIP.AllocationId
+        SubnetId: !Ref UTApublicA
         Tags:
         - Key: Name
-          Value: NATgateway
-# Create a private route table (one will do for the three private subnets since they share the same NAT Gateway),
-# then add a route to to the Internet, through the one NAT gateway,
-# and associate it with the three private subnets (requires 3 associations!)
-# First create the route table
-  UTAprivateRT:
+          Value: NATgatewayA
+# Create private route table, associate it with the private and database
+# subnet, then add a route to to the Internet to the NAT gateway
+# # Create private route table
+  UTAprivateART:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId:  
         Ref: UTAAnsibleVPC
       Tags:
       - Key: Name
-        Value: UTAprivateRT
-# # Add route to Internet through the NAT Gateway for IPv4
-  UTAprivateRTroute:
-    Type: AWS::EC2::Route
-    DependsOn: NATgateway  # Must create NAT Gateway in VPC/pub subnet first 
-    Properties:
-      RouteTableId:
-        Ref: UTAprivateRT
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId:
-        Ref: NATgateway
-# Associate the private Route Table with the three private subnets
+        Value: UTAprivateART
+# # Associate the private Route Table with private subnet A and database A
   UTASubnetRouteTableAssociationPrivateA:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId:
         Ref: UTAprivateA
       RouteTableId:
-        Ref: UTAprivateRT
+        Ref: UTAprivateART
+# # Add route to Internet to the NAT Gateway for IPv4
+  UTAprivateARTroute:
+    Type: AWS::EC2::Route
+    DependsOn: NATgatewayA  # Must create NAT Gateway in VPC/pub subnet first 
+    Properties:
+      RouteTableId:
+        Ref: UTAprivateART
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATgatewayA
+# END IMPORT **************************
+# BEGIN A AND B PRIVATE IMPORT
+# Create private route table, associate it with the private 
+# subnet, then add a route to to the Internet to the NAT gateway
+# # Create private route table
+  UTAprivateBRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  
+        Ref: UTAAnsibleVPC
+      Tags:
+      - Key: Name
+        Value: UTAprivateBRT
+# # Associate the private Route Table with private subnet B and database B
   UTASubnetRouteTableAssociationPrivateB:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId:
         Ref: UTAprivateB
       RouteTableId:
-        Ref: UTAprivateRT
+        Ref: UTAprivateBRT
+# # Add route to Internet to the NAT Gateway for IPv4
+  UTAprivateBRTroute:
+    Type: AWS::EC2::Route
+    DependsOn: NATgatewayA  # Must create NAT Gateway in VPC/pub subnet first 
+    Properties:
+      RouteTableId:
+        Ref: UTAprivateBRT
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATgatewayA
+# # # #
+# Availability Zone us-east-1c
+# Create private route table, associate it with the private
+# subnet, then add a route to to the Internet to the NAT gateway
+# # Create private route table
+  UTAprivateCRT:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  
+        Ref: UTAAnsibleVPC
+      Tags:
+      - Key: Name
+        Value: UTAprivateCRT
+# # Associate the private Route Table with private subnet C and database C
   UTASubnetRouteTableAssociationPrivateC:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId:
         Ref: UTAprivateC
       RouteTableId:
-        Ref: UTAprivateRT
+        Ref: UTAprivateCRT
+# # Add route to Internet to the NAT Gateway for IPv4
+  UTAprivateCRTroute:
+    Type: AWS::EC2::Route
+    DependsOn: NATgatewayA  # Must create NAT Gateway in VPC/pub subnet first 
+    Properties:
+      RouteTableId:
+        Ref: UTAprivateCRT
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATgatewayA
+# END  A AND B PRIVATE IMPORT
 # Define a security group that will be used for all nodes
   UTAansibleSG:
     Type: AWS::EC2::SecurityGroup
