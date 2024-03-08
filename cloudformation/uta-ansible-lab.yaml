@@ -25,7 +25,7 @@
 #
 # The UTA Ansible Lab utilises a non-default VPC (UTAAnsibleVPC), with one
 # public subnet (for the Control Node) and three private subnets (for the
-# four managed nodes). The private subnets utilise one NAT Gateway.
+# managed nodes). The private subnets utilise one NAT Gateway.
 #
 # To avoid unnecessary cloud computing charges (especially due to the
 # NAT Gateway),  tear down the stack after the lab work is over.
