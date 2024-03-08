@@ -7,7 +7,7 @@
 # The password of the ansible user and the ssh private key for the ansible 
 # user on all the nodes are retrieved from the Amazon Secrets Manager.
 # In Secrets Manager, the password is stored as a key-value pair, while the
-# priv. key must be base64-encoded ($ sudo base64 -w 0 private key) b4 storing as a Secrets Manager 'plain text'.
+# private key must be base64-encoded (base64 -w 0 private key).
 # The ansible user can ssh from any node to any other node without a password
 # (so, strictly speaking, the ansible user's password is not really required for Ansible tasks)
 # 
@@ -15,10 +15,6 @@
 # 1 - the name of the key pair (which must exist prior to launching this template)
 # 2 - the name of the IAM Instance Profile to associate with the EC2's. 
 #     This role must include the 'secretsmanager:GetSecretValue' policy.
-# The lab utilises a non-default VPC (UTAAnsibleVPC), with one public subnet
-# (for the Control Node) and, for simplicity, one private subnet (for the four managed nodes). The private subnet utilises a NAT Gateway.
-#
-# To avoid unnecessary cloud computing charges (especially due to the NAT Gateway),  tear down the stack after lab work.
 #
 # (c) 2024. Unix Training Academy. Author: Elias Igwegbu
 #
@@ -35,237 +31,15 @@ Parameters:
   IAMInstanceProfileName:
     Description: 'Name of the IAM Instance Profile to associate with the EC2 instance'
     Type: String
-    Default: 'uta-ansible-lab'  # Change as desired to customise this template
+    Default: 'ec2-ssm-fullaccess'  # Change as desired to customise this template
     ConstraintDescription: 'must be the name of an existing IAM Instance Profile that includes secretsmanager:GetSecretValue'
 Resources: 
-  UTAAnsibleVPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsHostnames: true
-      EnableDnsSupport: true
-      Tags:
-        - Key: Name
-          Value: UTAAnsibleVPC
-# BEGIN IMPORT for PUBLIC SUBNET *****************
-  # Public Subnets A, B, C
-  UTApublicA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId:
-        Ref: UTAAnsibleVPC
-      CidrBlock: 10.0.0.0/24
-      AvailabilityZone: "us-east-1a"
-      MapPublicIpOnLaunch: true
-      Tags:
-      - Key: Name
-        Value: UTApublicA
-# Create Internet Gateway
-  UTAAnsibleVPCIGW:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-      - Key: Name
-        Value: UTAAnsibleVPCIGW
-# Attach IGW to VPC
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId:
-        Ref: UTAAnsibleVPC
-      InternetGatewayId:
-        Ref: UTAAnsibleVPCIGW
-# Public Route Table
-  UTApublicRT:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId:  
-        Ref: UTAAnsibleVPC
-      Tags:
-      - Key: Name
-        Value: UTApublicRT
-# Public Route for IPv4
-  UTApublicRTroute:
-    Type: AWS::EC2::Route
-    DependsOn: AttachGateway  # Must attach IGW to VPC first 
-    Properties:
-      RouteTableId:
-        Ref: UTApublicRT
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId:
-        Ref: UTAAnsibleVPCIGW
-# Public Route for IPv6
-  UTApublicRTroute6:
-    Type: AWS::EC2::Route
-    DependsOn: AttachGateway
-    Properties:
-      RouteTableId:
-        Ref: UTApublicRT
-      DestinationIpv6CidrBlock: "::/0"
-      GatewayId:
-        Ref: UTAAnsibleVPCIGW
-# Associate the public Route Table with public Subnets A, B, C
-  UTASubnetRouteTableAssociationA:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId:
-        Ref: UTApublicA
-      RouteTableId:
-        Ref: UTApublicRT
-# END IMPORT for PUBLIC SUBNET *****************
-# BEGIN IMPORT *********************
-  # Define Private Subnets A, B, C
-  UTAprivateA:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId:
-        Ref: UTAAnsibleVPC
-      CidrBlock: 10.0.4.0/24
-      AvailabilityZone: "us-east-1a"
-      MapPublicIpOnLaunch: false
-      Tags:
-      - Key: Name
-        Value: UTAprivateA
-  UTAprivateB:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId:
-        Ref: UTAAnsibleVPC
-      CidrBlock: 10.0.5.0/24
-      AvailabilityZone: "us-east-1b"
-      MapPublicIpOnLaunch: false
-      Tags:
-      - Key: Name
-        Value: UTAprivateB
-  UTAprivateC:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId:
-        Ref: UTAAnsibleVPC
-      CidrBlock: 10.0.6.0/24
-      AvailabilityZone: "us-east-1c"
-      MapPublicIpOnLaunch: false
-      Tags:
-      - Key: Name
-        Value: UTAprivateC
-# Handle Private Subnets
-# Availability Zone us-east-1a
-# Create NAT Gateway (first create the EIP)
-# # Create EIP; note that the domain is vpc
-  NATgatewayAEIP:
-    Type: AWS::EC2::EIP
-    Properties:
-        Domain: vpc
-        Tags:
-        - Key: Name
-          Value: "NATgatewayA EIP"
-# # Create NAT gateway (default is public) and reference the EIP above
-  NATgatewayA:
-    Type: AWS::EC2::NatGateway
-    Properties:
-        AllocationId: !GetAtt NATgatewayAEIP.AllocationId
-        SubnetId: !Ref UTApublicA
-        Tags:
-        - Key: Name
-          Value: NATgatewayA
-# Create private route table, associate it with the private and database
-# subnet, then add a route to to the Internet to the NAT gateway
-# # Create private route table
-  UTAprivateART:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId:  
-        Ref: UTAAnsibleVPC
-      Tags:
-      - Key: Name
-        Value: UTAprivateART
-# # Associate the private Route Table with private subnet A and database A
-  UTASubnetRouteTableAssociationPrivateA:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId:
-        Ref: UTAprivateA
-      RouteTableId:
-        Ref: UTAprivateART
-# # Add route to Internet to the NAT Gateway for IPv4
-  UTAprivateARTroute:
-    Type: AWS::EC2::Route
-    DependsOn: NATgatewayA  # Must create NAT Gateway in VPC/pub subnet first 
-    Properties:
-      RouteTableId:
-        Ref: UTAprivateART
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId:
-        Ref: NATgatewayA
-# END IMPORT **************************
-# BEGIN A AND B PRIVATE IMPORT
-# Create private route table, associate it with the private 
-# subnet, then add a route to to the Internet to the NAT gateway
-# # Create private route table
-  UTAprivateBRT:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId:  
-        Ref: UTAAnsibleVPC
-      Tags:
-      - Key: Name
-        Value: UTAprivateBRT
-# # Associate the private Route Table with private subnet B and database B
-  UTASubnetRouteTableAssociationPrivateB:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId:
-        Ref: UTAprivateB
-      RouteTableId:
-        Ref: UTAprivateBRT
-# # Add route to Internet to the NAT Gateway for IPv4
-  UTAprivateBRTroute:
-    Type: AWS::EC2::Route
-    DependsOn: NATgatewayA  # Must create NAT Gateway in VPC/pub subnet first 
-    Properties:
-      RouteTableId:
-        Ref: UTAprivateBRT
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId:
-        Ref: NATgatewayA
-# # # #
-# Availability Zone us-east-1c
-# Create private route table, associate it with the private
-# subnet, then add a route to to the Internet to the NAT gateway
-# # Create private route table
-  UTAprivateCRT:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId:  
-        Ref: UTAAnsibleVPC
-      Tags:
-      - Key: Name
-        Value: UTAprivateCRT
-# # Associate the private Route Table with private subnet C and database C
-  UTASubnetRouteTableAssociationPrivateC:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId:
-        Ref: UTAprivateC
-      RouteTableId:
-        Ref: UTAprivateCRT
-# # Add route to Internet to the NAT Gateway for IPv4
-  UTAprivateCRTroute:
-    Type: AWS::EC2::Route
-    DependsOn: NATgatewayA  # Must create NAT Gateway in VPC/pub subnet first 
-    Properties:
-      RouteTableId:
-        Ref: UTAprivateCRT
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId:
-        Ref: NATgatewayA
-# END  A AND B PRIVATE IMPORT
 # Define a security group that will be used for all nodes
   UTAansibleSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: "UTAansibleSG"
-      VpcId: !Ref UTAAnsibleVPC
+      # VpcId: !Ref UTAVPC1 # use default VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
@@ -291,7 +65,6 @@ Resources:
       KeyName: !Ref KeyPairName
       SecurityGroupIds:
         - !Ref UTAansibleSG
-      SubnetId: !Ref UTApublicA
       IamInstanceProfile: !Ref IAMInstanceProfileName
       Tags:
         - Key: Name
@@ -346,13 +119,12 @@ Resources:
       LaunchTemplateData:
         ImageId: "ami-0fe630eb857a6ec83"
         InstanceType: "t2.micro"
-        # SubnetId: !Ref UTAprivateA # Reference to the private subnet
         KeyName: !Ref KeyPairName
         IamInstanceProfile:
           Name: !Ref IAMInstanceProfileName
         NetworkInterfaces:
           - DeviceIndex: 0
-            AssociatePublicIpAddress: false # Do not assign public IP
+            # AssociatePublicIpAddress: false # Do not assign public IP
             Groups:
               - !GetAtt UTAansibleSG.GroupId
         UserData:
@@ -407,8 +179,7 @@ Resources:
         LaunchTemplateId: !Ref AnsibleManagedNodeLaunchTemplate
         Version: !GetAtt AnsibleManagedNodeLaunchTemplate.LatestVersionNumber
       VPCZoneIdentifier:
-        - Ref: UTAprivateA
-        # - subnet-03198101485465b7a
+        - subnet-03198101485465b7a
       Tags:
         - Key: Name
           Value: AnsibleManagedNode
