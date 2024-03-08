@@ -260,7 +260,7 @@ Resources:
         - Key: Name
           Value: "AnsibleControlNode"
         - Key: Type
-          Value: AnsibleNode
+          Value: Workstation
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
@@ -381,5 +381,5 @@ Resources:
           Value: AnsibleManagedNode
           PropagateAtLaunch: true
         - Key: Type
-          Value: AnsibleNode
+          Value: server
           PropagateAtLaunch: true
