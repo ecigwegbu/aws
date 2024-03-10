@@ -2,7 +2,8 @@
 
 # create the file
 aws ec2 describe-instances --filters "Name=tag:Type,Values=AnsibleNode" \
-  --query 'Reservations[*].Instances[*].[PrivateIpAddress, Tags[?Key==`Name`].Value | [0]]' \
+  "Name=instance-state-name,Values=running" \
+  --query 'Reservations[*].Instances[*].[PrivateIpAddress, Tags[?Key==`AliasName`].Value | [0]]' \
   --output text > server_list.txt
 # The file you want to process
 file="server_list.txt"

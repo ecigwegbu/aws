@@ -2,17 +2,20 @@
 # This AWS CloudFormation Template creates a stack that builds the
 # Unix Training Academy Ansible Lab (see Class Materials)
 #
-# The Ansible Lab includes a RHEL9 Ansible Control Node and a user-specied number of RHEL9 Managed Nodes. It also installs EPEL and Ansible in the Control Node.
+# The Ansible Lab includes a RHEL9 Ansible Control Node and a user-specied number
+# of RHEL9 Managed Nodes. It also installs EPEL and Ansible in the Control Node.
 #
 # Each node has a user named ansible
 # The password of the ansible user and the ssh private key for the ansible 
 # user on all the nodes are retrieved from the Amazon Secrets Manager.
 # In Secrets Manager, the password is stored as a 'Key/value' pair, while the
-# priv. key must be base64-encoded ($ sudo base64 -w 0 private key) b4 storing as a Secrets Manager 'Plaintext'.
+# priv. key must be base64-encoded ($ sudo base64 -w 0 private key) b4 storing
+# as a Secrets Manager 'Plaintext'.
 # The ansible user can ssh from any node to any other node without a password
 # (so, strictly speaking, the ansible user's password is not really required for Ansible tasks)
 # 
-# The template utilises three parameters, with default values; change the defaults in this template as desired:
+# The template utilises three parameters, with default values; change the
+# defaults in this template as desired:
 # 1 - the name of the key pair (which must exist prior to launching this
 #     template). The matching private pem key must have been base-64 encoded
 #      as stated above and stored in Secrets Manager
@@ -34,7 +37,7 @@
 # (c) 2024. Unix Training Academy. Author: Elias Igwegbu
 #
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "UTA Ansible Lab version CloudFormation 1.0"
+Description: "UTA Ansible Lab CloudFormation version 1.1"
 Metadata:
   Author: "Elias C. Igwegbu, B.ENG, MBA, MNSE, SWE-ALX/Holberton, RHCSA, AWS-CCP"
 Parameters:
@@ -260,6 +263,8 @@ Resources:
       Tags:
         - Key: Name
           Value: "workstation"
+        - Key: AliasName
+          Value: "workstation"
         - Key: Type
           Value: "AnsibleNode"
       UserData:
@@ -384,7 +389,9 @@ Resources:
         - Key: Name
           Value: server
           PropagateAtLaunch: true
+        - Key: AliasName
+          Value: server
+          PropagateAtLaunch: true
         - Key: Type
           Value: "AnsibleNode"
           PropagateAtLaunch: true
-
