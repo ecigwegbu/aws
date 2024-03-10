@@ -2,8 +2,7 @@
 # This AWS CloudFormation Template creates a stack that builds the
 # Unix Training Academy Ansible Lab (see Class Materials)
 #
-# The Ansible Lab includes a RHEL9 Ansible Control Node and a user-specied number of RHEL9 Managed Nodes. It also installs EPEL and Ansible in the Control Node.
-#
+# The Ansible Lab includes a RHEL9 Ansible Control Node and a user-specied number of RHEL9 Managed Nodes.
 # Each node has a user named ansible
 # The password of the ansible user and the ssh private key for the ansible 
 # user on all the nodes are retrieved from the Amazon Secrets Manager.
@@ -251,7 +250,7 @@ Resources:
     Type: AWS::EC2::Instance
     Properties: 
       ImageId: "ami-0fe630eb857a6ec83"
-      InstanceType: "t2.small"
+      InstanceType: "t2.micro"
       KeyName: !Ref KeyPairName
       SecurityGroupIds:
         - !Ref UTAansibleSG
@@ -303,11 +302,8 @@ Resources:
             sudo echo $AnsiblePrivateKey | base64 --decode > /home/ansible/.ssh/id_rsa
             sudo chmod 600 /home/ansible/.ssh/id_rsa
             sudo chown -R ansible:ansible /home/ansible/.ssh
-            # install ansible, but first EPEL
-            sudo dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
-            sudo dnf install -y ansible
           fi
-# Define the Managed Nodes using Launch Templates
+# Define 4 Managed Nodes using Launch Templates
   AnsibleManagedNodeLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -387,4 +383,3 @@ Resources:
         - Key: Type
           Value: "AnsibleNode"
           PropagateAtLaunch: true
-
