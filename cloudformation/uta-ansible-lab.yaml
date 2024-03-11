@@ -249,7 +249,7 @@ Resources:
       Tags:
       - Key: Name
         Value: UTAansibleSG
-# Define the Control Node in the default VPC
+# Define the Control Node in the public subnet
   AnsibleControlNode: 
     Type: AWS::EC2::Instance
     Properties: 
@@ -311,10 +311,22 @@ Resources:
             # install ansible, but first EPEL
             sudo dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
             sudo dnf install -y ansible
+            # create the bin directory
+            mkdir -p /home/ansible/bin
+            chown ansible:ansible /home/ansible/bin
+            chmod 755 /home/ansible/bin
+            # Store the script initlab for initialising the lab 
+            echo '\
+              Hello World \
+            ' > /home/ansible/bin/initlab
+            chown -R ansible:ansible /home/ansible/bin
+            chmod +x /home/ansible/bin/initlab
+            # echo 'sudo su - ansible' >> /home/ec2-user/.bashrc
           fi
 # Define the Managed Nodes using Launch Templates
   AnsibleManagedNodeLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
+    DependsOn: AnsibleControlNode  # debug
     Properties:
       LaunchTemplateName: AnsibleManagedNodeTemplate # Optional
       LaunchTemplateData:

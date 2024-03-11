@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo -n "configuring the servers..."
+echo -n "Configuring the servers..."
 # create the file
 aws ec2 describe-instances --filters "Name=tag:Type,Values=AnsibleNode" \
   "Name=instance-state-name,Values=running" \
@@ -71,3 +71,4 @@ rm -f server_list.txt
 rm -f hosts-file
 echo
 echo "Done."
+bash
