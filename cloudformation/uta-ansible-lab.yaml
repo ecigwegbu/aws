@@ -3,7 +3,9 @@
 # Unix Training Academy Ansible Lab (see Class Materials)
 #
 # The Ansible Lab includes a RHEL9 Ansible Control Node and a user-specied number
-# of RHEL9 Managed Nodes. It also installs EPEL and Ansible in the Control Node.
+# of RHEL9 Managed Nodes. It also installs EPEL and Ansible in the Control Node,
+# configures a basic ansible.cfg file  and builds an initial inventory list 
+# in the /etc/ansible directory.
 #
 # Each node has a user named ansible
 # The password of the ansible user and the ssh private key for the ansible 
@@ -37,7 +39,7 @@
 # (c) 2024. Unix Training Academy. Author: Elias Igwegbu
 #
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "UTA Ansible Lab CloudFormation version 1.1"
+Description: "UTA Ansible Lab CloudFormation version 2.0"
 Metadata:
   Author: "Elias C. Igwegbu, B.ENG, MBA, MNSE, SWE-ALX/Holberton, RHCSA, AWS-CCP"
 Parameters:
@@ -273,7 +275,7 @@ Resources:
           # Install AWS CLI
           sudo dnf update -y
           sudo curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" \
-            -o "awscliv2.zip"
+          -o "awscliv2.zip"
           sudo dnf install -y unzip
           sudo unzip awscliv2.zip
           sudo ./aws/install
@@ -288,52 +290,169 @@ Resources:
           fi
           # create user ansible and enable ssh authentication with the existing key-pair
           if [[ -z $(getent passwd ansible) ]]; then
-            sudo useradd ansible
-            sudo mkdir /home/ansible/.ssh
-            sudo cp /home/ec2-user/.ssh/authorized_keys\
-              /home/ansible/.ssh/authorized_keys
-            sudo chown -R ansible:ansible /home/ansible/.ssh
-            sudo chmod 700 /home/ansible/.ssh
-            sudo chmod 600 /home/ansible/.ssh/authorized_keys
-            sudo echo "ansible ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/ansible
-            # Retrieve the Ansible user's password from Amazon Secrets Manager
-            # and assign it to the ansible user
-            AnsibleUserPassword=$(aws secretsmanager get-secret-value \
-              --secret-id ansible_user_password --query 'SecretString' \
-              --output text | jq -r .ansible_user_password)
-            sudo echo $AnsibleUserPassword | sudo passwd ansible --stdin
-            # Copy the private key from Amazon Secrets Manager to ~ansible/id_rsa
-            AnsiblePrivateKey=$(aws secretsmanager get-secret-value --secret-id \
-            ansible_private_key --query 'SecretString' --output text)
-            sudo echo $AnsiblePrivateKey | base64 --decode > /home/ansible/.ssh/id_rsa
-            sudo chmod 600 /home/ansible/.ssh/id_rsa
-            sudo chown -R ansible:ansible /home/ansible/.ssh
-            # install ansible, but first EPEL
-            sudo dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
-            sudo dnf install -y ansible
-            # create the bin directory
-            mkdir -p /home/ansible/bin
-            chown ansible:ansible /home/ansible/bin
-            chmod 755 /home/ansible/bin
-            # Store the script initlab for initialising the lab 
-            echo '\
-              echo Hello World \
-            ' > /home/ansible/bin/initlab
-            chown -R ansible:ansible /home/ansible/bin
-            chmod +x /home/ansible/bin/initlab
-            echo 'sudo su - ansible' >> /home/ssm-user/.bashrc
-            echo 'sudo su - ansible' >> /home/ec2-user/.bashrc
+          sudo useradd ansible
+          sudo mkdir /home/ansible/.ssh
+          sudo cp /home/ec2-user/.ssh/authorized_keys \
+          /home/ansible/.ssh/authorized_keys
+          # logger "Authorized_keys workstation - actual"
+          sudo chown -R ansible:ansible /home/ansible/.ssh
+          sudo chmod 700 /home/ansible/.ssh
+          sudo chmod 600 /home/ansible/.ssh/authorized_keys
+          sudo echo "ansible ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/ansible
+          # Retrieve the Ansible user's password from Amazon Secrets Manager
+          # and assign it to the ansible user
+          AnsibleUserPassword=$(aws secretsmanager get-secret-value \
+          --secret-id ansible_user_password --query 'SecretString' \
+          --output text | jq -r .ansible_user_password)
+          sudo echo $AnsibleUserPassword | sudo passwd ansible --stdin
+          # Copy the private key from Amazon Secrets Manager to ~ansible/id_rsa
+          AnsiblePrivateKey=$(aws secretsmanager get-secret-value --secret-id \
+          ansible_private_key --query 'SecretString' --output text)
+          sudo echo $AnsiblePrivateKey | base64 --decode > /home/ansible/.ssh/id_rsa
+          sudo chmod 600 /home/ansible/.ssh/id_rsa
+          sudo chown -R ansible:ansible /home/ansible/.ssh
+          # install ansible, but first EPEL
+          sudo dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+          sudo dnf install -y ansible
+          # create the .config directory
+          mkdir -p /home/ansible/.config/ansible-lab
+          chown -R ansible:ansible /home/ansible/.config
+          chmod -R 755 /home/ansible/.config
+          # Store the setup script for initialising the lab
+          cat <<'EOF' > /home/ansible/.config/ansible-lab/setup
+          #!/bin/bash
+          echo -n "Configuring the Ansible servers..."
+          # create the file
+          aws ec2 describe-instances --filters "Name=tag:Type,Values=AnsibleNode" \
+          "Name=instance-state-name,Values=running" \
+          --query 'Reservations[*].Instances[*].[PrivateIpAddress, Tags[?Key==`AliasName`].Value | [0]]' \
+          --output text > server_list.txt
+          # The file you want to process
+          file="server_list.txt"
+          # Letter initialization; the letter will be incremented for subsequent servers
+          letter=a
+          echo -n > hosts-file
+          # Read each line
+          while IFS= read -r line; do
+          # Check if line contains 'workstation'
+          if echo "$line" | grep -q 'workstation'; then
+          # extract the line item to the hosts-file
+          echo "$line workstation.lab.example.com" | sed "s/\s\+/    /g" >> hosts-file
+          # Re-label the Instance Name Tags on the console. First, retrieve the ip address
+          myip=$(echo $line | cut -d' ' -f 1)
+          # retrieve the instance id based on the private ip address:
+          instance_id=$(aws ec2 describe-instances \
+          --filters "Name=private-ip-address,Values=$myip" \
+          --query 'Reservations[*].Instances[*].InstanceId' \
+          --output text)
+          # set the instance Name tag based on the just retrieved instance id
+          aws ec2 create-tags --resources "$instance_id" --tags Key=Name,Value=workstation
+          elif echo "$line" | grep -q 'server'; then
+          # Append the current letter and print the line
+          echo "$line$letter server$letter.lab.example.com" | sed "s/\s\+/    /g" >> hosts-file
+          # Re-label the Instance Name Tags on the console. First, retrieve the ip address
+          myip=$(echo $line | cut -d' ' -f 1)
+          # retrieve the instance id based on the private ip address:
+          instance_id=$(aws ec2 describe-instances \
+          --filters "Name=private-ip-address,Values=$myip" \
+          --query 'Reservations[*].Instances[*].InstanceId' \
+          --output text)
+          # set the instance Name tag based on the just retrieved instance id
+          aws ec2 create-tags --resources "$instance_id" --tags Key=Name,Value=server"$letter"
+          # Increment the letter
+          letter=$(echo "$letter" | tr "a-yz" "b-za")
+          fi
+          done < "$file"
+          # now login to each server and set hostname and update /etc/hosts:
+          file="hosts-file"
+          # Open the file with file descriptor 3
+          exec 3< "$file"
+          # mkdir -p /home/ansible/.config/ansible-lab  # we will track processed nodes in here
+          # Read each line using file descriptor 3
+          while IFS= read -r line <&3; do
+          # get the ip address and hostname
+          myip=$(echo "$line" | cut -d' ' -f1)
+          myhostname=$(echo "$line" | cut -d' ' -f9)
+          # Only process the server once
+          if [[ ! -f /home/ansible/.config/ansible-lab/.processed_$myip ]]; then
+          # echo "processing $myhostname..."
+          # Set the hostname
+          ssh -n -q -o StrictHostKeyChecking=no "$myip" sudo hostnamectl set-hostname "$myhostname"
+          # copy the hosts-file created above to /etc/hosts, via /tmp; cleanup after the job
+          scp -q -o StrictHostKeyChecking=no hosts-file "$myip":/tmp/hosts-file.123456 >> /tmp/scp_log_123456.txt 2>&1
+          ssh -n -q -o StrictHostKeyChecking=no "$myip" 'cat /tmp/hosts-file.123456 | sudo tee -a /etc/hosts' >> /tmp/ssh_log_123456.txt 2>&1
+          ssh -n -q -o StrictHostKeyChecking=no "$myip" 'rm -f /tmp/hosts-file.123456'
+          touch "/home/ansible/.config/ansible-lab/.processed_$myip"
+          fi
+          echo -n \.
+          done 
+          # Close the file descriptor
+          exec 3<&-
+          # cleanup
+          rm -f server_list.txt
+          rm -f hosts-file
+          ssh-keyscan -f /etc/ansible/inventory 2> /dev/null | tee -a /home/ansible/.ssh/known_hosts > /dev/null  # debug
+          echo
+          echo "Done."
+          bash
+          EOF
+          chown ansible:ansible /home/ansible/.config/ansible-lab/setup
+          chmod u+x /home/ansible/.config/ansible-lab/setup
+          cat <<'EOF' >>/home/ansible/.bash_profile
+          if [[ ! -f /home/ansible/.config/ansible-lab/.lab-setup-done ]]; then
+          . /home/ansible/.config/ansible-lab/setup
+          touch /home/ansible/.config/ansible-lab/.lab-setup-done
+          chown ansible:ansible /home/ansible/.config/ansible-lab/.lab-setup-done
+          fi
+          EOF
+          chown ansible:ansible /home/ansible/.bash_profile
+          # cat <<'EOF' >/home/ansible/inventory
+          sudo tee /etc/ansible/inventory > /dev/null <<'EOF'
+          workstation.lab.example.com
+          servera.lab.example.com
+          serverb.lab.example.com
+          serverc.lab.example.com
+          serverd.lab.example.com
+          [webservers]
+          servera.lab.example.com
+          serverb.lab.example.com
+          [app]
+          serverc.lab.example.com
+          [db]
+          serverd.lab.example.com
+          [usa]
+          servera.lab.example.com
+          serverb.lab.example.com
+          serverc.lab.example.com
+          [canada]
+          serverd.lab.example.com
+          EOF
+          # cat <<'EOF' >/home/ansible/ansible.cfg
+          sudo tee /etc/ansible/ansible.cfg > /dev/null <<'EOF'
+          [defaults]
+          inventory=/etc/ansible/inventory
+          remote_user = ansible
+          ask_password = false
+          [privilege_escalation]
+          become=True
+          become_method=sudo
+          become_user=root
+          become_ask_pass=False
+          EOF
+          echo "  Configured SSH Key-based authentication, /etc/hosts and hostnames,"
+          echo "  inventory file and ansible.cfg."
+          echo "  Inventory File:       /etc/ansible/inventory"
+          echo "  Ansible Config File:  /etc/ansible/ansible.cfg"
           fi
 # Define the Managed Nodes using Launch Templates
   AnsibleManagedNodeLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
-    DependsOn: AnsibleControlNode  # debug
+    DependsOn: AnsibleControlNode
     Properties:
       LaunchTemplateName: AnsibleManagedNodeTemplate # Optional
       LaunchTemplateData:
         ImageId: "ami-0fe630eb857a6ec83"
         InstanceType: "t2.micro"
-        # SubnetId: !Ref UTAprivateA # Reference to the private subnet
         KeyName: !Ref KeyPairName
         IamInstanceProfile:
           Name: !Ref IAMInstanceProfileName
@@ -397,7 +516,6 @@ Resources:
         - Ref: UTAprivateA
         - Ref: UTAprivateB
         - Ref: UTAprivateC
-        # - subnet-03198101485465b7a
       Tags:
         - Key: Name
           Value: server
