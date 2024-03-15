@@ -39,7 +39,7 @@
 # (c) 2024. Unix Training Academy. Author: Elias Igwegbu
 #
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "UTA Ansible Lab CloudFormation version 2.0"
+Description: "UTA Ansible Lab CloudFormation version 2.1"
 Metadata:
   Author: "Elias C. Igwegbu, B.ENG, MBA, MNSE, SWE-ALX/Holberton, RHCSA, AWS-CCP"
 Parameters:
@@ -338,8 +338,8 @@ Resources:
           # Check if line contains 'workstation'
           if echo "$line" | grep -q 'workstation'; then
           # extract the line item to the hosts-file
-          echo "$line workstation.lab.example.com" | sed "s/\s\+/    /g" >> hosts-file
-          echo "workstation.lab.example.com" >> known-hosts-list
+          echo "$line workstation.lab.uta.com" | sed "s/\s\+/    /g" >> hosts-file
+          echo "workstation.lab.uta.com" >> known-hosts-list
           echo "workstation" >> known-hosts-list
           # Re-label the Instance Name Tags on the console. First, retrieve the ip address
           myip=$(echo $line | cut -d' ' -f 1)
@@ -353,8 +353,8 @@ Resources:
           aws ec2 create-tags --resources "$instance_id" --tags Key=Name,Value=workstation
           elif echo "$line" | grep -q 'server'; then
           # Append the current letter and print the line
-          echo "$line$letter server$letter.lab.example.com" | sed "s/\s\+/    /g" >> hosts-file
-          echo "server$letter.lab.example.com" >> known-hosts-list
+          echo "$line$letter server$letter.lab.uta.com" | sed "s/\s\+/    /g" >> hosts-file
+          echo "server$letter.lab.uta.com" >> known-hosts-list
           echo "server$letter" >> known-hosts-list
           # Re-label the Instance Name Tags on the console. First, retrieve the ip address
           myip=$(echo $line | cut -d' ' -f 1)
@@ -422,24 +422,24 @@ Resources:
           chown ansible:ansible /home/ansible/.bash_profile
           # cat <<'EOF' >/home/ansible/inventory
           sudo tee /etc/ansible/inventory > /dev/null <<'EOF'
-          workstation.lab.example.com
-          servera.lab.example.com
-          serverb.lab.example.com
-          serverc.lab.example.com
-          serverd.lab.example.com
+          workstation.lab.uta.com
+          servera.lab.uta.com
+          serverb.lab.uta.com
+          serverc.lab.uta.com
+          serverd.lab.uta.com
           [webservers]
-          servera.lab.example.com
-          serverb.lab.example.com
+          servera.lab.uta.com
+          serverb.lab.uta.com
           [app]
-          serverc.lab.example.com
+          serverc.lab.uta.com
           [db]
-          serverd.lab.example.com
+          serverd.lab.uta.com
           [usa]
-          servera.lab.example.com
-          serverb.lab.example.com
-          serverc.lab.example.com
+          servera.lab.uta.com
+          serverb.lab.uta.com
+          serverc.lab.uta.com
           [canada]
-          serverd.lab.example.com
+          serverd.lab.uta.com
           EOF
           # cat <<'EOF' >/home/ansible/ansible.cfg
           sudo tee /etc/ansible/ansible.cfg > /dev/null <<'EOF'
