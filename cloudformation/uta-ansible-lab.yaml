@@ -39,7 +39,7 @@
 # (c) 2024. Unix Training Academy. Author: Elias Igwegbu
 #
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "UTA Ansible Lab CloudFormation version 2.1"
+Description: "UTA Ansible Lab CloudFormation version 2.1.1"
 Metadata:
   Author: "Elias C. Igwegbu, B.ENG, MBA, MNSE, SWE-ALX/Holberton, RHCSA, AWS-CCP"
 Parameters:
@@ -56,6 +56,7 @@ Parameters:
   NumberOfManagedNodes:
     Description: 'The number of managed nodes'
     Type: Number
+    MinValue: 1  # At least one managed node; else stack doesn't make sense
     Default: 4  # Change this default as desired
 Resources: 
 # Create VPC
@@ -304,7 +305,7 @@ Resources:
           --secret-id ansible_user_password --query 'SecretString' \
           --output text | jq -r .ansible_user_password)
           sudo echo $AnsibleUserPassword | sudo passwd ansible --stdin
-          # Copy the private key from Amazon Secrets Manager to ~ansible/id_rsa
+          # Copy the private key from Amazon Secrets Manager to ~ansible/.ssh/id_rsa
           AnsiblePrivateKey=$(aws secretsmanager get-secret-value --secret-id \
           ansible_private_key --query 'SecretString' --output text)
           sudo echo $AnsiblePrivateKey | base64 --decode > /home/ansible/.ssh/id_rsa
@@ -318,8 +319,10 @@ Resources:
           chown -R ansible:ansible /home/ansible/.config
           chmod -R 755 /home/ansible/.config
           # Store the setup script for initialising the lab
-          cat <<'EOF' > /home/ansible/.config/ansible-lab/setup
+          # SETUP BEGIN
+          cat <<'EOF_SETUP' > /home/ansible/.config/ansible-lab/setup
           #!/bin/bash
+          echo
           echo -e "Ansible Lab Manager \u00A9 2024 Unix Training Academy"
           echo -n "Configuring the Ansible servers..."
           # create the file
@@ -333,6 +336,8 @@ Resources:
           letter=a
           echo -n > hosts-file
           echo -n > known-hosts-list
+          echo -n > all-hosts
+          num_of_nodes=0
           # Read each line
           while IFS= read -r line; do
           # Check if line contains 'workstation'
@@ -340,6 +345,7 @@ Resources:
           # extract the line item to the hosts-file
           echo "$line workstation.lab.uta.com" | sed "s/\s\+/    /g" >> hosts-file
           echo "workstation.lab.uta.com" >> known-hosts-list
+          echo "workstation.lab.uta.com" >> all-hosts
           echo "workstation" >> known-hosts-list
           # Re-label the Instance Name Tags on the console. First, retrieve the ip address
           myip=$(echo $line | cut -d' ' -f 1)
@@ -351,11 +357,13 @@ Resources:
           --output text)
           # set the instance Name tag based on the just retrieved instance id
           aws ec2 create-tags --resources "$instance_id" --tags Key=Name,Value=workstation
+          ((num_of_nodes++))
           elif echo "$line" | grep -q 'server'; then
           # Append the current letter and print the line
           echo "$line$letter server$letter.lab.uta.com" | sed "s/\s\+/    /g" >> hosts-file
           echo "server$letter.lab.uta.com" >> known-hosts-list
           echo "server$letter" >> known-hosts-list
+          echo "server$letter.lab.uta.com" >> all-hosts
           # Re-label the Instance Name Tags on the console. First, retrieve the ip address
           myip=$(echo $line | cut -d' ' -f 1)
           echo $myip >> known-hosts-list
@@ -368,6 +376,7 @@ Resources:
           aws ec2 create-tags --resources "$instance_id" --tags Key=Name,Value=server"$letter"
           # Increment the letter
           letter=$(echo "$letter" | tr "a-yz" "b-za")
+          ((num_of_nodes++))
           fi
           done < "$file"
           # now login to each server and set hostname and update /etc/hosts:
@@ -396,37 +405,51 @@ Resources:
           # Close the file descriptor
           exec 3<&-
           ssh-keyscan -t rsa -f known-hosts-list 2> /dev/null | tee -a /home/ansible/.ssh/known_hosts > /dev/null  # debug
-          # cleanup
-          rm -f server_list.txt
-          rm -f hosts-file
-          rm -f known-hosts-list
-          echo
-          echo "Done."
-          echo "Ansible is installed and configured"
-          echo "  - SSH Key-based authentication ... ok"
-          echo "  - /etc/hosts and hostnames ... ok"
-          echo "  - inventory file: /etc/ansible/inventory"
-          echo "  - config file:    /etc/ansible/ansible.cfg"
-          echo "Run 'ansible --version' for more information."
+          # Now do the inventory
+          ## INVENTORY BEGIN
+          # First add all the hosts
+          sudo cat all-hosts | sudo tee -a /etc/ansible/inventory > /dev/null
+          if [[ $num_of_nodes -eq 2 ]]; then
+          sudo tee -a /etc/ansible/inventory > /dev/null <<'EOF'
+          [webservers]
+          servera.lab.uta.com
+          [app]
+          servera.lab.uta.com
+          [db]
+          [usa]
+          servera.lab.uta.com
+          [canada]
           EOF
-          chown ansible:ansible /home/ansible/.config/ansible-lab/setup
-          chmod u+x /home/ansible/.config/ansible-lab/setup
-          cat <<'EOF' >>/home/ansible/.bash_profile
-          if [[ ! -f /home/ansible/.config/ansible-lab/.lab-setup-done ]]; then
-          . /home/ansible/.config/ansible-lab/setup
-          touch /home/ansible/.config/ansible-lab/.lab-setup-done
-          chown ansible:ansible /home/ansible/.config/ansible-lab/.lab-setup-done
-          fi
-          bash
+          elif [[ $num_of_nodes -eq 3 ]]; then
+          sudo tee -a /etc/ansible/inventory > /dev/null <<'EOF'
+          [webservers]
+          servera.lab.uta.com
+          [app]
+          serverb.lab.uta.com
+          [db]
+          serverb.lab.uta.com
+          [usa]
+          servera.lab.uta.com
+          [canada]
+          serverb.lab.uta.com
           EOF
-          chown ansible:ansible /home/ansible/.bash_profile
-          # cat <<'EOF' >/home/ansible/inventory
-          sudo tee /etc/ansible/inventory > /dev/null <<'EOF'
-          workstation.lab.uta.com
+          elif [[ $num_of_nodes -eq 4 ]]; then
+          sudo tee -a /etc/ansible/inventory > /dev/null <<'EOF'
+          [webservers]
           servera.lab.uta.com
           serverb.lab.uta.com
+          [app]
           serverc.lab.uta.com
-          serverd.lab.uta.com
+          [db]
+          serverc.lab.uta.com
+          [usa]
+          servera.lab.uta.com
+          serverb.lab.uta.com
+          [canada]
+          serverc.lab.uta.com
+          EOF
+          else
+          sudo tee -a /etc/ansible/inventory > /dev/null <<'EOF'
           [webservers]
           servera.lab.uta.com
           serverb.lab.uta.com
@@ -441,6 +464,37 @@ Resources:
           [canada]
           serverd.lab.uta.com
           EOF
+          fi
+          ## INVENTORY END
+          # End inventory block
+          # cleanup
+          rm -f server_list.txt
+          rm -f hosts-file
+          rm -f known-hosts-list
+          rm -f all-hosts
+          touch /home/ansible/.config/ansible-lab/.lab-setup-done
+          chown ansible:ansible /home/ansible/.config/ansible-lab/.lab-setup-done
+          echo
+          echo "Done."
+          echo "Ansible is installed and configured"
+          echo "  - SSH Key-based authentication ... ok"
+          echo "  - /etc/hosts and hostnames ... ok"
+          echo "  - inventory file: /etc/ansible/inventory"
+          echo "  - config file:    /etc/ansible/ansible.cfg"
+          echo "Run 'ansible --version' for more information."
+          EOF_SETUP
+          # SETUP END
+          chown ansible:ansible /home/ansible/.config/ansible-lab/setup
+          chmod u+x /home/ansible/.config/ansible-lab/setup
+          # BASH PROFILE BEGIN
+          cat <<'EOF' >>/home/ansible/.bash_profile
+          if [[ ! -f /home/ansible/.config/ansible-lab/.lab-setup-done ]]; then
+          . /home/ansible/.config/ansible-lab/setup
+          fi
+          bash
+          EOF
+          # BASH PROFILE END
+          chown ansible:ansible /home/ansible/.bash_profile
           # cat <<'EOF' >/home/ansible/ansible.cfg
           sudo tee /etc/ansible/ansible.cfg > /dev/null <<'EOF'
           [defaults]
@@ -536,3 +590,4 @@ Resources:
         - Key: Type
           Value: "AnsibleNode"
           PropagateAtLaunch: true
+
