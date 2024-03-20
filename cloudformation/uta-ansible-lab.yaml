@@ -57,6 +57,7 @@ Parameters:
     Description: 'The number of managed nodes'
     Type: Number
     MinValue: 1  # At least one managed node; else stack doesn't make sense
+    MaxValue: 26  # But also limited by your EC2 service quota limit, if is less.
     Default: 4  # Change this default as desired
 Resources: 
 # Create VPC
@@ -336,7 +337,6 @@ Resources:
           letter=a
           echo -n > hosts-file
           echo -n > known-hosts-list
-          echo -n > all-hosts
           num_of_nodes=0
           # Read each line
           while IFS= read -r line; do
@@ -345,7 +345,6 @@ Resources:
           # extract the line item to the hosts-file
           echo "$line workstation.lab.uta.com" | sed "s/\s\+/    /g" >> hosts-file
           echo "workstation.lab.uta.com" >> known-hosts-list
-          echo "workstation.lab.uta.com" >> all-hosts
           echo "workstation" >> known-hosts-list
           # Re-label the Instance Name Tags on the console. First, retrieve the ip address
           myip=$(echo $line | cut -d' ' -f 1)
@@ -363,7 +362,6 @@ Resources:
           echo "$line$letter server$letter.lab.uta.com" | sed "s/\s\+/    /g" >> hosts-file
           echo "server$letter.lab.uta.com" >> known-hosts-list
           echo "server$letter" >> known-hosts-list
-          echo "server$letter.lab.uta.com" >> all-hosts
           # Re-label the Instance Name Tags on the console. First, retrieve the ip address
           myip=$(echo $line | cut -d' ' -f 1)
           echo $myip >> known-hosts-list
@@ -408,7 +406,7 @@ Resources:
           # Now do the inventory
           ## INVENTORY BEGIN
           # First add all the hosts
-          sudo cat all-hosts | sudo tee -a /etc/ansible/inventory > /dev/null
+          sudo cat known-hosts-list | sudo tee -a /etc/ansible/inventory > /dev/null
           if [[ $num_of_nodes -eq 2 ]]; then
           sudo tee -a /etc/ansible/inventory > /dev/null <<'EOF'
           [webservers]
@@ -471,7 +469,6 @@ Resources:
           rm -f server_list.txt
           rm -f hosts-file
           rm -f known-hosts-list
-          rm -f all-hosts
           touch /home/ansible/.config/ansible-lab/.lab-setup-done
           chown ansible:ansible /home/ansible/.config/ansible-lab/.lab-setup-done
           echo
@@ -590,4 +587,3 @@ Resources:
         - Key: Type
           Value: "AnsibleNode"
           PropagateAtLaunch: true
-
